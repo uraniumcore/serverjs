@@ -66,6 +66,23 @@ app.get('/player-names/:auth', async (req, res) => {
   }
 });
 
+// Check if player is admin
+app.get('/is-admin/:auth', async (req, res) => {
+  const { auth } = req.params;
+  
+  try {
+    const result = await pool.query(
+      'SELECT EXISTS(SELECT 1 FROM admins WHERE auth = $1) as is_admin',
+      [auth]
+    );
+    
+    res.json({ isAdmin: result.rows[0].is_admin });
+  } catch (err) {
+    console.error("Database error:", err);
+    res.status(500).json({ error: "Database error", details: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
