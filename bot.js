@@ -58,7 +58,8 @@ room.onPlayerChat = function(player, message) {
     console.log('Chat event:', {
         playerId: player.id,
         playerName: player.name,
-        message: message
+        message: message,
+        auth: player.auth // Log the auth value
     });
 
     // Check if message starts with '!'
@@ -79,22 +80,33 @@ room.onPlayerChat = function(player, message) {
                 return false; // Prevent the original message from being sent
                 
             case 'my-names':
-                console.log('Checking my-names for player:', player.id);
-                if (!player.auth) {
-                    console.log('Player not authenticated:', player.id);
-                    room.sendAnnouncement('❌ You must be authenticated to use this command', player.id);
-                    return false;
-                }
-                
+                console.log('Checking my-names for player:', {
+                    id: player.id,
+                    name: player.name,
+                    auth: player.auth,
+                    hasAuth: !!player.auth
+                });
+
                 // Send initial message
                 console.log('Sending loading message to player:', player.id);
                 room.sendAnnouncement('🔍 Fetching your names...', player.id);
                 
+                // Log the API call
+                console.log('Making API call to:', `${API_URL}/player-names/${player.auth}`);
+                
                 fetch(`${API_URL}/player-names/${player.auth}`)
-                    .then(response => response.json())
+                    .then(response => {
+                        console.log('API Response status:', response.status);
+                        return response.json();
+                    })
                     .then(names => {
-                        console.log('Received names for player:', player.id, names);
-                        if (names.length === 0) {
+                        console.log('Received names for player:', {
+                            playerId: player.id,
+                            playerName: player.name,
+                            names: names
+                        });
+
+                        if (!names || names.length === 0) {
                             room.sendAnnouncement('📝 You have no recorded names yet', player.id);
                             return;
                         }

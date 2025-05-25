@@ -50,7 +50,8 @@ app.get('/player-names/:auth', async (req, res) => {
     const result = await pool.query(
       `SELECT DISTINCT pn.name 
        FROM player_names pn
-       JOIN players p ON p.auth = $1
+       JOIN players p ON p.id = pn.id
+       WHERE p.auth = $1
        ORDER BY pn.name`,
       [auth]
     );
