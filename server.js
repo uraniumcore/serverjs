@@ -24,9 +24,15 @@ app.post('/player-join', async (req, res) => {
   try {
     // Insert player name if not exists (ignore duplicates)
     await pool.query(
-      `INSERT INTO player_names (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
-      [name]
+      `INSERT INTO player_names (player_id, name)
+       VALUES (
+         (SELECT id FROM players WHERE auth = $1),
+         $2
+       )
+       ON CONFLICT DO NOTHING`,
+      [auth, name]
     );
+    
 
     // Upsert player auth with last_joined_at = now()
     await pool.query(

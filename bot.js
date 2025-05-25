@@ -2,7 +2,8 @@ var room = HBInit({
     roomName: "My Room",
     maxPlayers: 18, // 4 per team + potential specs
     noPlayer: true,
-    public: true
+    public: false,
+    token: 'thr1.AAAAAGgzP4Runf45lKAeOg.xfDvmfDCgeY'
 });
 
 // Set game rules
@@ -10,6 +11,8 @@ room.setScoreLimit(5);
 room.setTimeLimit(5);
 
 const API_URL = 'https://serverjs-qc9e.onrender.com';
+
+const joinedPlayers = [];
 
 // Check if player is admin
 async function isPlayerAdmin(auth) {
@@ -30,6 +33,15 @@ function updateAdmins() {
 }
 
 room.onPlayerJoin = async function(player) {
+    const alreadyTracked = joinedPlayers.some(p => p.auth === player.auth);
+
+    if (!alreadyTracked) {
+        joinedPlayers.push({ id: player.id, auth: player.auth });
+    }
+
+    // Optionally: log or use this
+    console.log("Currently joined players:", joinedPlayers);
+
     // Check if player is admin
     const isAdmin = await isPlayerAdmin(player.auth);
     if (isAdmin) {
@@ -51,76 +63,52 @@ room.onPlayerJoin = async function(player) {
 
 room.onPlayerLeave = function(player) {
     updateAdmins();
-}
+
+    const index = joinedPlayers.findIndex(p => p.id === player.id);
+    if (index !== -1) {
+      joinedPlayers.splice(index, 1);
+    }
+}  
 
 // Handle chat commands
-room.onPlayerChat = function(player, message) {
-    console.log('Chat event:', {
-        playerId: player.id,
-        playerName: player.name,
-        message: message,
-        auth: player.auth // Log the auth value
-    });
+room.onPlayerChat = async function(player, message) {
+    const playerauth = joinedPlayers.find(p => p.id === player.id);
+
+    console.log(playerauth);
 
     // Check if message starts with '!'
     if (message.startsWith('!')) {
-        console.log('Command detected:', message);
-        
         // Get the command (remove the '!' and convert to lowercase)
         const command = message.slice(1).toLowerCase();
-        console.log('Command parsed:', command);
         
         // Handle different commands
         switch (command) {
             case 'help':
-                console.log('Sending help message to player:', player.id);
                 room.sendAnnouncement('📚 Available commands:', player.id);
                 room.sendAnnouncement('!help - Show this help message', player.id);
                 room.sendAnnouncement('!my-names - Show all names you have used', player.id);
                 return false; // Prevent the original message from being sent
                 
             case 'my-names':
-                console.log('Checking my-names for player:', {
-                    id: player.id,
-                    name: player.name,
-                    auth: player.auth,
-                    hasAuth: !!player.auth
-                });
-
-                // Send initial message
-                console.log('Sending loading message to player:', player.id);
-                room.sendAnnouncement('🔍 Fetching your names...', player.id);
-                
-                // Log the API call
-                console.log('Making API call to:', `${API_URL}/player-names/${player.auth}`);
-                
-                fetch(`${API_URL}/player-names/${player.auth}`)
+                fetch(`${API_URL}/player-names/${playerauth.auth}`)
                     .then(response => {
-                        console.log('API Response status:', response.status);
+                        if (!response.ok) {
+                            throw new Error("HTTP status " + response.status);
+                        }
                         return response.json();
                     })
                     .then(names => {
-                        console.log('Received names for player:', {
-                            playerId: player.id,
-                            playerName: player.name,
-                            names: names
-                        });
-
-                        if (!names || names.length === 0) {
-                            room.sendAnnouncement('📝 You have no recorded names yet', player.id);
-                            return;
+                        if (!Array.isArray(names)) {
+                            throw new Error("Invalid response format");
                         }
-                        
-                        room.sendAnnouncement('📝 Your recorded names:', player.id);
-                        names.forEach(name => {
-                            room.sendAnnouncement(`• ${name.name}`, player.id);
-                        });
+
+                        const nameList = names.map(n => n.name).join(", ");
+                        room.sendAnnouncement(`📝 Your recorded names: ${nameList}`, player.id);
                     })
                     .catch(err => {
                         console.error('Failed to fetch names:', err);
                         room.sendAnnouncement('❌ Failed to fetch your names', player.id);
                     });
-                return false;
         }
     }
     
