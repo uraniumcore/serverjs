@@ -42,6 +42,29 @@ app.post('/player-join', async (req, res) => {
   }
 });
 
+// Get player names by auth
+app.get('/player-names/:auth', async (req, res) => {
+  const { auth } = req.params;
+  
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT pn.name 
+       FROM player_names pn
+       JOIN players p ON p.auth = $1
+       ORDER BY pn.name`,
+      [auth]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No names found for this player' });
+    }
+    
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Database error:", err);
+    res.status(500).json({ error: "Database error", details: err.message });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
