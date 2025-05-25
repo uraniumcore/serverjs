@@ -1,6 +1,6 @@
 var room = HBInit({
     roomName: "My Room",
-    maxPlayers: 18, // 4 per team + potential specs
+    maxPlayers: 12, // 4 per team + potential specs
     noPlayer: true,
     public: false,
     token: 'thr1.AAAAAGgzP4Runf45lKAeOg.xfDvmfDCgeY'
@@ -11,6 +11,9 @@ room.setScoreLimit(5);
 room.setTimeLimit(5);
 
 const API_URL = 'https://serverjs-qc9e.onrender.com';
+
+// Track if game is running
+let isGameRunning = false;
 
 const joinedPlayers = [];
 
@@ -32,7 +35,120 @@ function updateAdmins() {
     if (players.some(player => player.admin)) return;
 }
 
+function isTeamFull(teamId) {
+    const players = room.getPlayerList();
+    const teamPlayers = players.filter(p => p.team === teamId);
+    return teamPlayers.length >= 4;
+}
+
+// Check if we can start a game
+function checkGameStart() {
+    const players = room.getPlayerList();
+    
+    console.log("Checking game start:", {
+        players: players.length,
+        isGameRunning: isGameRunning
+    });
+    
+    // Start game if we have 2+ players in teams and no game is running
+    if (players.length >= 2 && !isGameRunning) {
+        console.log("can start!");
+        // Shuffle players into teams
+        const shuffledPlayers = [...players].sort(() => Math.random() - 0.5);
+        
+        // Announce game start
+        room.sendAnnouncement("Game starting in 20 seconds!");
+
+        // Start the game after 20 seconds
+        setTimeout(() => {
+            // Split players into two teams
+            shuffledPlayers.forEach((player, index) => {
+                // Even indices go to red (1), odd to blue (2)
+                room.setPlayerTeam(player.id, index % 2 === 0 ? 1 : 2);
+            });
+            if (!isGameRunning) {  // Double check game hasn't started
+                room.startGame();
+            }
+        }, 3000);  // 20 seconds
+    }
+}
+
+function checkTeamBalance() {
+    const players = room.getPlayerList();
+    const redTeam = players.filter(p => p.team === 1);
+    const blueTeam = players.filter(p => p.team === 2);
+    
+    const difference = Math.abs(redTeam.length - blueTeam.length);
+    
+    if(!isGameRunning) return;
+
+    if(players.length <= 1) {
+        isGameRunning = false;
+        room.pauseGame(true);
+    }
+
+    if (difference >= 2) { // If one team has 2+ more players
+        room.pauseGame(true);
+        isGameRunning = false;
+        room.sendAnnouncement("Game paused: Teams are imbalanced!");
+    } else {
+        room.pauseGame(false);
+        isGameRunning = true;
+    }
+}
+
+room.onPlayerTeamChange = function(changedPlayer, byPlayer) {
+    console.log("Checked!")
+    checkTeamBalance();
+}
+
+
+function getTeamWithFewerPlayers() {
+    const players = room.getPlayerList();
+    const redTeam = players.filter(p => p.team === 1);
+    const blueTeam = players.filter(p => p.team === 2);
+    
+    if (redTeam.length < blueTeam.length) {
+        return 1; // Red team
+    } else {
+        return 2; // Blue team
+    }
+}
+
+function balanceWaitingPlayers() {
+    const players = room.getPlayerList();
+    const spectators = players.filter(p => p.team === 0);
+    
+    console.log("Current spectators:", spectators.map(s => s.name));
+    
+    // If we have an even number of spectators, assign them to teams
+    if (spectators.length >= 2 && spectators.length % 2 == 0) {
+        spectators.forEach((player, index) => {
+            const teamToJoin = getTeamWithFewerPlayers();
+            if (!isTeamFull(teamToJoin)) {
+                room.setPlayerTeam(player.id, teamToJoin);
+            }
+        });
+    }
+}
+
+// Track game state
+room.onGameStart = function() {
+    console.log("Game started");
+    isGameRunning = true;
+}
+
+room.onGameStop = function() {
+    console.log("Game stopped");
+    isGameRunning = false;
+    // Check if we can start a new game
+    checkGameStart();
+}
+
+
 room.onPlayerJoin = async function(player) {
+    const players = room.getPlayerList();
+
     const alreadyTracked = joinedPlayers.some(p => p.auth === player.auth);
 
     if (!alreadyTracked) {
@@ -41,6 +157,9 @@ room.onPlayerJoin = async function(player) {
 
     // Optionally: log or use this
     console.log("Currently joined players:", joinedPlayers);
+    const spectators = players.filter(p => p.team === 0);
+    const redTeam = players.filter(p => p.team === 1);
+    const blueTeam = players.filter(p => p.team === 2);
 
     // Check if player is admin
     const isAdmin = await isPlayerAdmin(player.auth);
@@ -59,6 +178,25 @@ room.onPlayerJoin = async function(player) {
             ip: player.IP // optional, might not be available depending on env
         })
     }).catch(err => console.error('Failed to log player:', err));
+
+    // If game is running, assign player to team with fewer players
+    if (isGameRunning) {
+        const teamToJoin = getTeamWithFewerPlayers();
+        if (teamToJoin == 1 && redTeam.length <= 4) {
+            room.setPlayerTeam(player.id, teamToJoin);
+        }
+        else if (teamToJoin == 2 && blueTeam.length <= 4) {
+            room.setPlayerTeam(player.id, teamToJoin);
+        }
+        
+        else if (teamToJoin == 0) {
+            balanceWaitingPlayers();
+        }
+    }
+
+    // Check if we can start a game
+    checkGameStart();
+    checkTeamBalance();
 }
 
 room.onPlayerLeave = function(player) {
@@ -66,8 +204,10 @@ room.onPlayerLeave = function(player) {
 
     const index = joinedPlayers.findIndex(p => p.id === player.id);
     if (index !== -1) {
-      joinedPlayers.splice(index, 1);
+        joinedPlayers.splice(index, 1);
     }
+
+    checkTeamBalance();
 }  
 
 // Handle chat commands
