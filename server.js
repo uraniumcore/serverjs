@@ -57,8 +57,10 @@ app.post('/player-join', async (req, res) => {
 
 // Set player as admin
 app.post('/set-admin', async (req, res) => {
+  console.log('Received set-admin request:', req.body); // Add this debug line
   const { auth } = req.body;
   if (!auth) {
+    console.log('Missing auth in request'); // Add this debug line
     return res.status(400).json({ error: 'Missing auth', success: false });
   }
 

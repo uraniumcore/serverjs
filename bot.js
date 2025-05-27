@@ -2,8 +2,8 @@ var room = HBInit({
     roomName: "HaxBalling | KZ",
     maxPlayers: 12, // 4 per team + potential specs
     noPlayer: true,
-    public: true,
-    token: 'thr1.AAAAAGg1X-SlTJNOahiBBA.cvE2aCSY0oE',
+    public: false,
+    token: 'thr1.AAAAAGg1ku5uezk5t1OlsQ.A3p786ZBUGA',
     geo: {
         "code": "KZ", "lat" : 51.1605, "lon" : 71.4704
     }
@@ -323,6 +323,7 @@ room.onTeamVictory = function(scores) {
 // START START START
 
 room.onPlayerChat = function(player, message) {
+    let auth = getPlayerAuthById(player.id);
     // Check if message is a command (starts with !)
     if (message.startsWith('!')) {
         // Split the message into command and arguments
@@ -353,7 +354,6 @@ room.onPlayerChat = function(player, message) {
                 return false;
                 
             case 'deanon':
-                let auth = getPlayerAuthById(player.id);
                 try {
                     if (deanonCommand(auth)) {
                         // Extract just the names from the objects and join them
@@ -394,7 +394,7 @@ room.onPlayerChat = function(player, message) {
                 return false;
 
             case 'setadmin':
-                if (player.auth !== OWNER_AUTH) {
+                if (auth !== OWNER_AUTH) {
                     room.sendAnnouncement('You are not authorized to use this command.', player.id);
                     return false;
                 }
@@ -407,11 +407,14 @@ room.onPlayerChat = function(player, message) {
                 
                 // Get the mentioned player
                 const targetPlayer = room.getPlayerList().find(p => p.name === args[0].replace('@', ''));
+                targetPlayerAuth = getPlayerAuthById(targetPlayer.id);
                 if (!targetPlayer) {
                     room.sendAnnouncement('Player not found.', player.id);
                     return false;
                 }
                 
+                console.log(targetPlayerAuth);
+
                 // Make the API call to set admin
                 fetch(`${API_URL}/set-admin`, {
                     method: 'POST',
@@ -419,10 +422,15 @@ room.onPlayerChat = function(player, message) {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        auth: targetPlayer.auth
+                        auth: targetPlayerAuth
                     })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         room.sendAnnouncement(`${targetPlayer.name} is now an admin.`);
@@ -443,5 +451,5 @@ room.onPlayerChat = function(player, message) {
                 return false;
         }
     }
-    return false; // Allow normal messages to be shown in chat
+    return true; // Allow normal messages to be shown in chat
 }
