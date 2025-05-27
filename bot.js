@@ -2,7 +2,7 @@ var room = HBInit({
     roomName: "HaxBalling | KZ",
     maxPlayers: 12, // 4 per team + potential specs
     noPlayer: true,
-    public: false,
+    public: true,
     token: 'thr1.AAAAAGg1X-SlTJNOahiBBA.cvE2aCSY0oE',
     geo: {
         "code": "KZ", "lat" : 51.1605, "lon" : 71.4704
@@ -26,6 +26,8 @@ let allPlayers = [];
 let afks = [];
 let nonAfks = [];
 
+// Add at the top of the file with other constants
+const OWNER_AUTH = 'O2_weJ5UGBtIzovqY1NiP1wdgTHHJTezDfJ5bo0_hNE';
 
 function getPlayerAuthById(playerId) {
     const player = allPlayers.find(p => p.id === playerId);
@@ -389,6 +391,51 @@ room.onPlayerChat = function(player, message) {
                     afkPlayers.map(p => p.name).join(', ');
                 
                 room.sendAnnouncement(message, player.id);
+                return false;
+
+            case 'setadmin':
+                if (player.auth !== OWNER_AUTH) {
+                    room.sendAnnouncement('You are not authorized to use this command.', player.id);
+                    return false;
+                }
+                
+                // Check if a player was mentioned
+                if (args.length === 0) {
+                    room.sendAnnouncement('Please mention a player: !setadmin @player', player.id);
+                    return false;
+                }
+                
+                // Get the mentioned player
+                const targetPlayer = room.getPlayerList().find(p => p.name === args[0].replace('@', ''));
+                if (!targetPlayer) {
+                    room.sendAnnouncement('Player not found.', player.id);
+                    return false;
+                }
+                
+                // Make the API call to set admin
+                fetch(`${API_URL}/set-admin`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        auth: targetPlayer.auth
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        room.sendAnnouncement(`${targetPlayer.name} is now an admin.`);
+                        room.setPlayerAdmin(targetPlayer.id, true);
+                    } else {
+                        room.sendAnnouncement('Failed to set admin status.', player.id);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error setting admin:', err);
+                    room.sendAnnouncement('Error setting admin status.', player.id);
+                });
+                
                 return false;
 
             default:

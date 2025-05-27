@@ -55,6 +55,39 @@ app.post('/player-join', async (req, res) => {
   }
 });
 
+// Set player as admin
+app.post('/set-admin', async (req, res) => {
+  const { auth } = req.body;
+  if (!auth) {
+    return res.status(400).json({ error: 'Missing auth', success: false });
+  }
+
+  try {
+    // First check if player exists
+    const playerResult = await pool.query(
+      'SELECT id FROM players WHERE auth = $1',
+      [auth]
+    );
+
+    if (playerResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Player not found', success: false });
+    }
+
+    // Insert or update admin status
+    await pool.query(
+      `INSERT INTO admins (auth)
+       VALUES ($1)
+       ON CONFLICT (auth) DO NOTHING`,
+      [auth]
+    );
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Database error:", err);
+    res.status(500).json({ error: "Database error", details: err.message, success: false });
+  }
+});
+
 // Get player names by auth
 app.get('/player-names/:auth', async (req, res) => {
   const { auth } = req.params;
