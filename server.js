@@ -22,23 +22,26 @@ app.post('/player-join', async (req, res) => {
   }
 
   try {
-    // Insert player name if not exists (ignore duplicates)
-    await pool.query(
-      `INSERT INTO player_names (player_id, name)
-       VALUES (
-         (SELECT id FROM players WHERE auth = $1),
-         $2
-       )
-       ON CONFLICT DO NOTHING`,
-      [auth, name]
-    );
-    
-
     // Upsert player auth with last_joined_at = now()
     await pool.query(
       `INSERT INTO players (auth, last_joined_at) VALUES ($1, NOW())
        ON CONFLICT (auth) DO UPDATE SET last_joined_at = NOW()`,
       [auth]
+    );
+
+    // Insert player name if not exists (ignore duplicates)
+    await pool.query(
+      `INSERT INTO player_names (player_id, name)
+       VALUES ($1, $2)
+       ON CONFLICT (player_id, name) DO NOTHING`,
+      [auth, name]
+    );
+
+    // Player log data record
+    await pool.query(
+      `INSERT INTO player_logs (player_id, name)
+       VALUES ($1, $2)`,
+      [playerId, name]
     );
 
     res.sendStatus(200);

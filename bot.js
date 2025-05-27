@@ -1,27 +1,40 @@
 var room = HBInit({
-    roomName: "My Room",
+    roomName: "HaxBalling | KZ",
     maxPlayers: 12, // 4 per team + potential specs
     noPlayer: true,
     public: false,
-    token: 'thr1.AAAAAGgzP4Runf45lKAeOg.xfDvmfDCgeY'
+    token: 'thr1.AAAAAGg1X-SlTJNOahiBBA.cvE2aCSY0oE',
+    geo: {
+        "code": "KZ", "lat" : 51.1605, "lon" : 71.4704
+    }
 });
+
+console.log('Room initialized.');
 
 // Set game rules
 room.setScoreLimit(5);
 room.setTimeLimit(5);
 
+
 const API_URL = 'https://serverjs-qc9e.onrender.com';
 
-// Track if game is running
-let isGameRunning = false;
+let allPlayers = [];
+let afks = [];
+let nonAfks = [];
 
-const joinedPlayers = [];
+
+function getPlayerAuthById(playerId) {
+    const player = allPlayers.find(p => p.id === playerId);
+    return player ? player.auth : null;
+}
 
 // Check if player is admin
 async function isPlayerAdmin(auth) {
     try {
+        console.log('Making admin check request for auth:', auth);
         const response = await fetch(`${API_URL}/is-admin/${auth}`);
         const data = await response.json();
+        console.log('Admin check response:', data); // Add this line to debug
         return data.isAdmin;
     } catch (err) {
         console.error('Failed to check admin status:', err);
@@ -29,228 +42,216 @@ async function isPlayerAdmin(auth) {
     }
 }
 
-function updateAdmins() { 
-    var players = room.getPlayerList();
-    if (players.length == 0) return;
-    if (players.some(player => player.admin)) return;
-}
-
-function isTeamFull(teamId) {
+async function updateAdmins(player) { 
     const players = room.getPlayerList();
-    const teamPlayers = players.filter(p => p.team === teamId);
-    return teamPlayers.length >= 4;
-}
-
-// Check if we can start a game
-function checkGameStart() {
-    const players = room.getPlayerList();
-    
-    console.log("Checking game start:", {
-        players: players.length,
-        isGameRunning: isGameRunning
-    });
-    
-    // Start game if we have 2+ players in teams and no game is running
-    if (players.length >= 2 && !isGameRunning) {
-        console.log("can start!");
-        // Shuffle players into teams
-        const shuffledPlayers = [...players].sort(() => Math.random() - 0.5);
-        
-        // Announce game start
-        room.sendAnnouncement("Game starting in 20 seconds!");
-
-        // Start the game after 20 seconds
-        setTimeout(() => {
-            // Split players into two teams
-            shuffledPlayers.forEach((player, index) => {
-                // Even indices go to red (1), odd to blue (2)
-                room.setPlayerTeam(player.id, index % 2 === 0 ? 1 : 2);
-            });
-            if (!isGameRunning) {  // Double check game hasn't started
-                room.startGame();
-            }
-        }, 3000);  // 20 seconds
+    if (players.length === 0){
+        console.log('No players in room, skipping admin update');
+        return;
     }
-}
-
-function checkTeamBalance() {
-    const players = room.getPlayerList();
-    const redTeam = players.filter(p => p.team === 1);
-    const blueTeam = players.filter(p => p.team === 2);
-    
-    const difference = Math.abs(redTeam.length - blueTeam.length);
-    
-    if(!isGameRunning) return;
-
-    if(players.length <= 1) {
-        isGameRunning = false;
-        room.pauseGame(true);
-    }
-
-    if (difference >= 2) { // If one team has 2+ more players
-        room.pauseGame(true);
-        isGameRunning = false;
-        room.sendAnnouncement("Game paused: Teams are imbalanced!");
-    } else {
-        room.pauseGame(false);
-        isGameRunning = true;
-    }
-}
-
-room.onPlayerTeamChange = function(changedPlayer, byPlayer) {
-    console.log("Checked!")
-    checkTeamBalance();
-}
-
-
-function getTeamWithFewerPlayers() {
-    const players = room.getPlayerList();
-    const redTeam = players.filter(p => p.team === 1);
-    const blueTeam = players.filter(p => p.team === 2);
-    
-    if (redTeam.length < blueTeam.length) {
-        return 1; // Red team
-    } else {
-        return 2; // Blue team
-    }
-}
-
-function balanceWaitingPlayers() {
-    const players = room.getPlayerList();
-    const spectators = players.filter(p => p.team === 0);
-    
-    console.log("Current spectators:", spectators.map(s => s.name));
-    
-    // If we have an even number of spectators, assign them to teams
-    if (spectators.length >= 2 && spectators.length % 2 == 0) {
-        spectators.forEach((player, index) => {
-            const teamToJoin = getTeamWithFewerPlayers();
-            if (!isTeamFull(teamToJoin)) {
-                room.setPlayerTeam(player.id, teamToJoin);
-            }
+    try {
+        console.log(`Checking admin status for player: ${player.name} (${player.auth})`);
+        const isAdmin = await isPlayerAdmin(player.auth);
+        console.log(`Admin check result for ${player.name}:`, isAdmin); // Add this line to debug
+        if (isAdmin) {
+            // Set player as admin in the room
+            room.setPlayerAdmin(player.id, true);
+            console.log(`Admin privileges granted to: ${player.name}`);
+            room.sendChat(`${player.name} is an admin`);
+        } else {
+            console.log(`Player ${player.name} is not an admin`);
+        }
+    } catch (err) {
+        console.error('Failed to update admin status:', {
+            player: player.name,
+            auth: player.auth,
+            error: err.message
         });
     }
 }
 
-// Track game state
-room.onGameStart = function() {
-    console.log("Game started");
-    isGameRunning = true;
+/* COMMANDS */
+async function deanonCommand(auth) {
+    try {
+        const response = await fetch(`${API_URL}/player-names/${auth}`);
+        const data = await response.json();
+        console.log(data);
+
+        const names = data;
+
+        const nameList = names.map(item => item.name).join(', ');
+
+        id = allPlayers.find(p => p.id === auth);
+
+        room.sendAnnouncement(`Previous names: ${nameList}`, id);
+
+        return true;
+    } catch (err) {
+        console.error('Failed to check names:', err);
+        return false;
+    }
 }
 
-room.onGameStop = function() {
-    console.log("Game stopped");
-    isGameRunning = false;
-    // Check if we can start a new game
-    checkGameStart();
+/* GAME LOGIC */
+// START START START
+
+// Track if game is running
+let isGameRunning = false;
+
+let players = room.getPlayerList();
+let spectators = players.filter(p => p.team === 0);
+let redTeam = players.filter(p => p.team === 1);
+let blueTeam = players.filter(p => p.team === 2);
+
+function teamsUpdate() {
+    players = room.getPlayerList();
+    spectators = players.filter(p => p.team === 0);
+    redTeam = players.filter(p => p.team === 1);
+    blueTeam = players.filter(p => p.team === 2);
 }
 
+function whoToJoin() {
+    teamsUpdate();
+    if (redTeam.length > blueTeam.length) return 2;
+    if (redTeam.length < blueTeam.length) return 1;
+    else {
+        if (spectators.length >= 2){
+            shuffle();
+        }
+    }
+}
+
+async function updatePlayer(player) {
+    console.log(`Updating player in database: ${player.name} (${player.auth})`);
+    // Log player join to database
+    try {
+        const response = await fetch(`${API_URL}/player-join`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: player.name,
+                auth: player.auth
+            })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to log player join:', {
+                player: player.name,
+                status: response.status,
+                error: errorText
+            });
+        } else {
+            console.log(`Successfully logged player join: ${player.name}`);
+        }
+    } catch (err) {
+        console.error('Error logging player join:', {
+            player: player.name,
+            error: err.message,
+            stack: err.stack
+        });
+    }
+}
+
+function goAfk(player) {
+    console.log(`Player going AFK: ${player.name}`);
+    afks.push(player.id);
+    console.log('Current AFK players:', afks);
+}
+
+function exitAfk(player) {
+    console.log(`Player no longer AFK: ${player.name}`);
+    afks = afks.filter(id => id !== player.id);
+    console.log('Current AFK players:', afks);
+}
 
 room.onPlayerJoin = async function(player) {
-    const players = room.getPlayerList();
+    console.log(`Player joined: ${player.name} (${player.auth})`);
 
-    const alreadyTracked = joinedPlayers.some(p => p.auth === player.auth);
+    allPlayers.push({
+        id: player.id,
+        auth: player.auth,
+        name: player.name
+    });
 
-    if (!alreadyTracked) {
-        joinedPlayers.push({ id: player.id, auth: player.auth });
-    }
+    await updateAdmins(player);
+    await updatePlayer(player);
 
-    // Optionally: log or use this
-    console.log("Currently joined players:", joinedPlayers);
-    const spectators = players.filter(p => p.team === 0);
-    const redTeam = players.filter(p => p.team === 1);
-    const blueTeam = players.filter(p => p.team === 2);
+    room.sendChat(`Welcome ${player.name}! Type !help for available commands.`);
 
-    // Check if player is admin
-    const isAdmin = await isPlayerAdmin(player.auth);
-    if (isAdmin) {
-        room.setPlayerAdmin(player.id, true);
-    }
-    updateAdmins();
-
-    // Send data to backend
-    fetch(`${API_URL}/player-join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            name: player.name,
-            auth: player.auth,
-            ip: player.IP // optional, might not be available depending on env
-        })
-    }).catch(err => console.error('Failed to log player:', err));
-
-    // If game is running, assign player to team with fewer players
-    if (isGameRunning) {
-        const teamToJoin = getTeamWithFewerPlayers();
-        if (teamToJoin == 1 && redTeam.length <= 4) {
-            room.setPlayerTeam(player.id, teamToJoin);
-        }
-        else if (teamToJoin == 2 && blueTeam.length <= 4) {
-            room.setPlayerTeam(player.id, teamToJoin);
-        }
-        
-        else if (teamToJoin == 0) {
-            balanceWaitingPlayers();
-        }
-    }
-
-    // Check if we can start a game
-    checkGameStart();
-    checkTeamBalance();
+    console.log(`Welcome message sent to: ${player.name}`);
 }
 
 room.onPlayerLeave = function(player) {
-    updateAdmins();
+    console.log(`Player left: ${player.name} (${player.auth})`);
 
-    const index = joinedPlayers.findIndex(p => p.id === player.id);
-    if (index !== -1) {
-        joinedPlayers.splice(index, 1);
+    allPlayers = allPlayers.filter(p => p.id !== player.id);
+
+    // Clean up AFK status if player was AFK
+    if (afks.includes(player.id)) {
+        console.log(`Removing AFK status for left player: ${player.name}`);
+        exitAfk(player);
     }
+}
 
-    checkTeamBalance();
-}  
+/* GAME LOGIC END */
+// END END END
 
-// Handle chat commands
-room.onPlayerChat = async function(player, message) {
-    const playerauth = joinedPlayers.find(p => p.id === player.id);
+/* CHAT LOGIC */
+// START START START
 
-    console.log(playerauth);
-
-    // Check if message starts with '!'
+room.onPlayerChat = function(player, message) {
+    // Check if message is a command (starts with !)
     if (message.startsWith('!')) {
-        // Get the command (remove the '!' and convert to lowercase)
-        const command = message.slice(1).toLowerCase();
+        // Split the message into command and arguments
+        const [command, ...args] = message.slice(1).split(' ');
         
-        // Handle different commands
-        switch (command) {
+        switch (command.toLowerCase()) {
             case 'help':
-                room.sendAnnouncement('📚 Available commands:', player.id);
-                room.sendAnnouncement('!help - Show this help message', player.id);
-                room.sendAnnouncement('!my-names - Show all names you have used', player.id);
-                return false; // Prevent the original message from being sent
+                room.sendAnnouncement('Available commands: !help, !stats, !deanon', player.id);
+                return false; // Don't show the command in chat
+            
+            case 'start':
+                if(nonAfks.length < 2){
+                    room.sendAnnouncement('At least 2 players to start the game.');
+                } else {
+                    room.sendAnnouncement('Mixing...');
+                    
+                }
+            case 'stats':
+                // TODO: Implement stats command
+                room.sendAnnouncement('Stats command coming soon!', player.id);
+                return false;
                 
-            case 'my-names':
-                fetch(`${API_URL}/player-names/${playerauth.auth}`)
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error("HTTP status " + response.status);
-                        }
-                        return response.json();
-                    })
-                    .then(names => {
-                        if (!Array.isArray(names)) {
-                            throw new Error("Invalid response format");
-                        }
-
-                        const nameList = names.map(n => n.name).join(", ");
-                        room.sendAnnouncement(`📝 Your recorded names: ${nameList}`, player.id);
-                    })
-                    .catch(err => {
-                        console.error('Failed to fetch names:', err);
-                        room.sendAnnouncement('❌ Failed to fetch your names', player.id);
-                    });
+            case 'deanon':
+                let auth = getPlayerAuthById(player.id);
+                try {
+                    if (deanonCommand(auth)) {
+                        // Extract just the names from the objects and join them
+                    } else {
+                        room.sendAnnouncement('No previous names found', player.id);
+                    }
+                } catch (err) {
+                    console.error('Error in deanon command:', err);
+                    room.sendAnnouncement('Failed to fetch previous names', player.id);
+                }
+                return false;
+        
+            case 'afk':
+                if(afks.includes(player.id)) {
+                    exitAfk(player);
+                    room.sendAnnouncement(`${player.name} is no longer AFK`);
+                } else {
+                    goAfk(player);
+                    room.sendAnnouncement(`${player.name} is now AFK`);
+                }
+                return false;
+            
+            default:
+                room.sendAnnouncement(`Unknown command: ${command}. Type !help for available commands.`);
+                return false;
         }
     }
-    
-    return true; // Allow other messages to be sent normally
+    return false; // Allow normal messages to be shown in chat
 }
