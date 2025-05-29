@@ -20,7 +20,7 @@ room.setScoreLimit(5);
 room.setTimeLimit(5);
 
 
-const API_URL = 'http://34.88.189.3:3000/';
+const API_URL = 'http://34.88.189.3:3000';
 
 let allPlayers = [];
 let afks = [];
