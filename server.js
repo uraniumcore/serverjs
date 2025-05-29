@@ -8,10 +8,11 @@ app.use(express.json());
 app.use(cors());
 
 const pool = new Pool({
-  connectionString: 'postgresql://abdizhamiyev:gONSMeTxZEGuXptgkVYArmk2YRJ1WcUQ@dpg-d0phq53uibrs73fsasmg-a.frankfurt-postgres.render.com/haxball',
-  ssl: {
-    rejectUnauthorized: false
-  }
+  user: 'postgres',
+  host: 'localhost',
+  database: 'haxball',
+  password: 'postgres',
+  port: 5432,
 });
 
 // Example endpoint: logs player join

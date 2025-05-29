@@ -275,30 +275,33 @@ room.onPlayerJoin = async function(player) {
         name: player.name
     });
 
-    await updateAdmins(player);
-    await updatePlayer(player);
-
     if (!nonAfks.includes(player.id)) {
         nonAfks.push(player.id);
     }
-
     room.sendAnnouncement(`Welcome ${player.name}! Type !help for available commands.`);
 
     console.log(`Welcome message sent to: ${player.name}`);
+
+    await updateAdmins(player);
+    await updatePlayer(player);
 }
 
 room.onPlayerLeave = function(player) {
     console.log(`Player left: ${player.name} (${player.auth})`);
 
+    // Remove from allPlayers
     allPlayers = allPlayers.filter(p => p.id !== player.id);
-    nonAfks = nonAfks.filter(id => id !== player.id);
-
-    allPlayers = allPlayers.filter(p => p.id !== player.id);
-
-    // Clean up AFK status if player was AFK
+    
+    // Remove from nonAfks if present
+    if (nonAfks.includes(player.id)) {
+        console.log(`Removing non-AFK status for left player: ${player.name}`);
+        nonAfks = nonAfks.filter(id => id !== player.id);
+    }
+    
+    // Remove from afks if present
     if (afks.includes(player.id)) {
         console.log(`Removing AFK status for left player: ${player.name}`);
-        exitAfk(player);
+        afks = afks.filter(id => id !== player.id);
     }
 }
 
