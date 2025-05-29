@@ -10,7 +10,7 @@ app.use(cors());
 const pool = new Pool({
   user: 'abdizhamiyev',
   host: 'localhost',
-  database: 'haxball',
+  database: 'postgres',
   password: 'new_secure_password',
   port: 5432,
 });
