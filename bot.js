@@ -3,7 +3,7 @@ var room = HBInit({
     maxPlayers: 12, // 4 per team + potential specs
     noPlayer: true,
     public: false,
-    token: 'thr1.AAAAAGg1ku5uezk5t1OlsQ.A3p786ZBUGA',
+    token: 'thr1.AAAAAGg4DFbsBUcshh--OA.QiaiW3KNF1k',
     geo: {
         "code": "KZ", "lat" : 51.1605, "lon" : 71.4704
     }
