@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "init.js",
   "scripts": {
-    "start": "node init.js server.js"
+    "start": "npx puppeteer browsers install chrome && node init.js server.js"
   },
   "dependencies": {
     "puppeteer": "^23.0.0"
