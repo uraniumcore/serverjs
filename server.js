@@ -2,7 +2,8 @@ var room = HBInit({
 	roomName: "Leclerc",
 	maxPlayers: 18, // 4 per team + potential specs
 	noPlayer: true,
-	public: true
+	public: true,
+	token: "thr1.AAAAAGkXWJOow3OvfSVuIg.imKCSV3Mu1s"
 });
 
 // Set game rules
