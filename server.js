@@ -1,139 +1,41 @@
-// server.js
-const express = require('express');
-const { Pool } = require('pg');
-const cors = require('cors');
-
-const app = express();
-app.use(express.json());
-app.use(cors());
-
-const pool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'postgres',
-  password: 'password',
-  port: 5432,
+var room = HBInit({
+	roomName: "Leclerc",
+	maxPlayers: 18, // 4 per team + potential specs
+	noPlayer: true,
+	public: true
 });
 
-// Example endpoint: logs player join
-app.post('/player-join', async (req, res) => {
-  const { name, auth } = req.body;
-  if (!auth || !name) {
-    return res.status(400).json({ error: 'Missing name or auth' });
-  }
+// Set game rules
+room.setScoreLimit(5);
+room.setTimeLimit(5);
 
-  try {
-    // Upsert player auth with last_joined_at = now() and get the player ID
-    const playerResult = await pool.query(
-      `INSERT INTO players (auth, last_joined_at) 
-       VALUES ($1, NOW())
-       ON CONFLICT (auth) DO UPDATE SET last_joined_at = NOW()
-       RETURNING id`,
-      [auth]
-    );
-    
-    const playerId = playerResult.rows[0].id;
+// Admin management (from previous example)
+const MY_AUTH = "L-CDSX9_CIGvQzQHDOmp91j2wzuE4PAlY0fgPLOWVPM";
 
-    // Insert player name if not exists (ignore duplicates)
-    await pool.query(
-      `INSERT INTO player_names (player_id, name)
-       VALUES ($1, $2)
-       ON CONFLICT (player_id, name) DO NOTHING`,
-      [playerId, name]
-    );
+function updateAdmins() {
+	var players = room.getPlayerList();
+	if (players.length == 0) return;
+	if (players.some(player => player.admin)) return;
+}
 
-    // Player log data record
-    await pool.query(
-      `INSERT INTO player_logs (player_id, name)
-       VALUES ($1, $2)`,
-      [playerId, name]
-    );
+room.onPlayerJoin = function (player) {
+	if (player.auth === MY_AUTH) {
+		room.setPlayerAdmin(player.id, true);
+	}
+	updateAdmins();
 
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("Database error:", err);
-    res.status(500).json({ error: "Database error", details: err.message });
-  }
-});
+	// Send data to backend
+	fetch('https://serverjs-qc9e.onrender.com/player-join', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			name: player.name,
+			auth: player.auth,
+			ip: player.IP // optional, might not be available depending on env
+		})
+	}).catch(err => console.error('Failed to log player:', err));
+}
 
-// Set player as admin
-app.post('/set-admin', async (req, res) => {
-  console.log('Received set-admin request:', req.body); // Add this debug line
-  const { auth } = req.body;
-  if (!auth) {
-    console.log('Missing auth in request'); // Add this debug line
-    return res.status(400).json({ error: 'Missing auth', success: false });
-  }
-
-  try {
-    // First check if player exists
-    const playerResult = await pool.query(
-      'SELECT id FROM players WHERE auth = $1',
-      [auth]
-    );
-
-    if (playerResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Player not found', success: false });
-    }
-
-    // Insert or update admin status
-    await pool.query(
-      `INSERT INTO admins (auth)
-       VALUES ($1)
-       ON CONFLICT (auth) DO NOTHING`,
-      [auth]
-    );
-    
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Database error:", err);
-    res.status(500).json({ error: "Database error", details: err.message, success: false });
-  }
-});
-
-// Get player names by auth
-app.get('/player-names/:auth', async (req, res) => {
-  const { auth } = req.params;
-  
-  try {
-    const result = await pool.query(
-      `SELECT DISTINCT pn.name 
-       FROM player_names pn
-       JOIN players p ON p.id = pn.player_id
-       WHERE p.auth = $1
-       ORDER BY pn.name`,
-      [auth]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'No names found for this player' });
-    }
-    
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Database error:", err);
-    res.status(500).json({ error: "Database error", details: err.message });
-  }
-});
-
-// Check if player is admin
-app.get('/is-admin/:auth', async (req, res) => {
-  const { auth } = req.params;
-  
-  try {
-    const result = await pool.query(
-      'SELECT EXISTS(SELECT 1 FROM admins WHERE auth = $1) as is_admin',
-      [auth]
-    );
-    
-    res.json({ isAdmin: result.rows[0].is_admin });
-  } catch (err) {
-    console.error("Database error:", err);
-    res.status(500).json({ error: "Database error", details: err.message });
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+room.onPlayerLeave = function (player) {
+	updateAdmins();
+}
